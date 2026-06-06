@@ -1,0 +1,56 @@
+From c08d4da6e58799465317599804d46a530cc0f704 Mon Sep 17 00:00:00 2001
+From: Michael Crosby <crosbymichael@gmail.com>
+Date: Fri, 28 Jun 2019 13:42:30 -0400
+Subject: [PATCH] Send exec exit event on failures
+
+Fixes #39427
+
+This always sends the exec exit events even when the exec fails to find
+the binary.  A standard 127 exit status is sent in this situation.
+
+Signed-off-by: Michael Crosby <crosbymichael@gmail.com>
+---
+ daemon/monitor.go | 19 ++++++++-----------
+ 1 file changed, 8 insertions(+), 11 deletions(-)
+
+diff --git a/daemon/monitor.go b/daemon/monitor.go
+index 7cae6e7a5a..5ef97c7dfa 100644
+--- a/daemon/monitor.go
++++ b/daemon/monitor.go
+@@ -117,6 +117,7 @@ func (daemon *Daemon) ProcessEvent(id string, e libcontainerdtypes.EventType, ei
+ 			return cpErr
+ 		}
+ 
++		exitCode := 127
+ 		if execConfig := c.ExecCommands.Get(ei.ProcessID); execConfig != nil {
+ 			ec := int(ei.ExitCode)
+ 			execConfig.Lock()
+@@ -131,18 +132,14 @@ func (daemon *Daemon) ProcessEvent(id string, e libcontainerdtypes.EventType, ei
+ 			// remove the exec command from the container's store only and not the
+ 			// daemon's store so that the exec command can be inspected.
+ 			c.ExecCommands.Delete(execConfig.ID, execConfig.Pid)
+-			attributes := map[string]string{
+-				"execID":   execConfig.ID,
+-				"exitCode": strconv.Itoa(ec),
+-			}
+-			daemon.LogContainerEventWithAttributes(c, "exec_die", attributes)
+-		} else {
+-			logrus.WithFields(logrus.Fields{
+-				"container": c.ID,
+-				"exec-id":   ei.ProcessID,
+-				"exec-pid":  ei.Pid,
+-			}).Warn("Ignoring Exit Event, no such exec command found")
++
++			exitCode = ec
++		}
++		attributes := map[string]string{
++			"execID":   ei.ProcessID,
++			"exitCode": strconv.Itoa(exitCode),
+ 		}
++		daemon.LogContainerEventWithAttributes(c, "exec_die", attributes)
+ 	case libcontainerdtypes.EventStart:
+ 		c.Lock()
+ 		defer c.Unlock()
+-- 
+2.34.1
+

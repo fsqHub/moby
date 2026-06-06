@@ -1,0 +1,152 @@
+From 50d30284646520608156a9721a1a4150816d20cf Mon Sep 17 00:00:00 2001
+From: Brian Goff <cpuguy83@gmail.com>
+Date: Tue, 21 Feb 2023 20:33:14 +0000
+Subject: [PATCH] Fix fd leak/goroutine when attaching stdin only
+
+When only stdin is attached the goroutine can only ever exit if:
+
+1. The container pipe is closed while trying to write to it
+2. The client closes the stdin read pipe
+
+This is because `io.Copy` does a read on the read side then a write to
+the write side.
+If reading from the client's stdin pipe blocks, the goroutine will never
+get notified that the container pipe is closed.
+
+Signed-off-by: Brian Goff <cpuguy83@gmail.com>
+---
+ container/stream/attach.go      |   8 +++
+ container/stream/attach_test.go | 102 ++++++++++++++++++++++++++++++++
+ 2 files changed, 110 insertions(+)
+ create mode 100644 container/stream/attach_test.go
+
+diff --git a/container/stream/attach.go b/container/stream/attach.go
+index 6079d20d1e..c0b0302f46 100644
+--- a/container/stream/attach.go
++++ b/container/stream/attach.go
+@@ -150,6 +150,14 @@ func (c *Config) CopyStreams(ctx context.Context, cfg *AttachConfig) <-chan erro
+ 				cfg.CStderr.Close()
+ 			}
+ 
++			if cfg.Stdin != nil {
++				// In this case, `cfg.Stdin` is a stream from the client.
++				// The way `io.Copy` works we may get stuck waiting to read from `cfg.Stdin` even if the container has exited.
++				// This will cause the `io.Copy` to never return and the `group.Wait()` to never return.
++				// By closing cfg.Stdin we will cause the `io.Copy` to return and the `group.Wait()` to return.
++				cfg.Stdin.Close()
++			}
++
+ 			// Now with these closed, wait should return.
+ 			if err := group.Wait(); err != nil {
+ 				errs <- err
+diff --git a/container/stream/attach_test.go b/container/stream/attach_test.go
+new file mode 100644
+index 0000000000..043d8b7a28
+--- /dev/null
++++ b/container/stream/attach_test.go
+@@ -0,0 +1,102 @@
++package stream
++
++import (
++	"context"
++	"io"
++	"testing"
++	"time"
++
++	"gotest.tools/v3/assert"
++)
++
++// Make sure when there is no I/O on a stream that the goroutines do not get blcoked after the container exits.
++func TestAttachNoIO(t *testing.T) {
++	t.Run("stdin only", func(t *testing.T) {
++		stdinR, _ := io.Pipe()
++		defer stdinR.Close()
++		testStreamCopy(t, stdinR, nil, nil)
++	})
++
++	t.Run("stdout only", func(t *testing.T) {
++		_, w := io.Pipe()
++		defer w.Close()
++		testStreamCopy(t, nil, w, nil)
++	})
++
++	t.Run("stderr only", func(t *testing.T) {
++		_, w := io.Pipe()
++		defer w.Close()
++		testStreamCopy(t, nil, nil, w)
++	})
++
++	t.Run("stdout+stderr", func(t *testing.T) {
++		_, stdoutW := io.Pipe()
++		defer stdoutW.Close()
++		_, stderrW := io.Pipe()
++		defer stderrW.Close()
++
++		testStreamCopy(t, nil, stdoutW, stderrW)
++	})
++
++	t.Run("stdin+stdout", func(t *testing.T) {
++		stdin, _ := io.Pipe()
++		defer stdin.Close()
++		_, stdout := io.Pipe()
++		defer stdout.Close()
++
++		testStreamCopy(t, stdin, stdout, nil)
++	})
++
++	t.Run("stdin+stderr", func(t *testing.T) {
++		stdin, _ := io.Pipe()
++		defer stdin.Close()
++		_, stderr := io.Pipe()
++		defer stderr.Close()
++
++		testStreamCopy(t, stdin, nil, stderr)
++	})
++
++	t.Run("stdin+stdout+stderr", func(t *testing.T) {
++		stdinR, _ := io.Pipe()
++		defer stdinR.Close()
++		stdoutR, stdoutW := io.Pipe()
++		defer stdoutR.Close()
++		stderrR, stderrW := io.Pipe()
++		defer stderrR.Close()
++		testStreamCopy(t, stdinR, stdoutW, stderrW)
++	})
++}
++
++func testStreamCopy(t *testing.T, stdin io.ReadCloser, stdout, stderr io.WriteCloser) {
++	cfg := AttachConfig{
++		UseStdin:  stdin != nil,
++		UseStdout: stdout != nil,
++		UseStderr: stderr != nil,
++		Stdin:     stdin,
++		Stdout:    stdout,
++		Stderr:    stderr,
++	}
++
++	sc := NewConfig()
++	sc.AttachStreams(&cfg)
++	defer sc.CloseStreams()
++
++	ctx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	chErr := sc.CopyStreams(ctx, &cfg)
++
++	select {
++	case err := <-chErr:
++		assert.NilError(t, err)
++	default:
++	}
++
++	cancel()
++
++	select {
++	case err := <-chErr:
++		assert.ErrorIs(t, err, context.Canceled)
++	case <-time.After(10 * time.Second):
++		t.Fatal("timeout waiting for CopyStreams to exit")
++	}
++}
+-- 
+2.34.1
+

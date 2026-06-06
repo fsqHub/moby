@@ -1,0 +1,986 @@
+From 52379fa76dee07ca038624d639d9e14f4fb719ff Mon Sep 17 00:00:00 2001
+From: Tianon Gravi <admwiggin@gmail.com>
+Date: Mon, 13 Feb 2017 11:01:54 -0800
+Subject: [PATCH] Convert script shebangs from "#!/bin/bash" to "#!/usr/bin/env
+ bash"
+
+This is especially important for distributions like NixOS where `/bin/bash` doesn't exist, or for MacOS users who've installed a newer version of Bash than the one that comes with their OS.
+
+Signed-off-by: Andrew "Tianon" Page <admwiggin@gmail.com>
+---
+ contrib/builder/deb/aarch64/build.sh                       | 2 +-
+ contrib/builder/deb/aarch64/generate.sh                    | 2 +-
+ contrib/builder/deb/amd64/build.sh                         | 2 +-
+ contrib/builder/deb/amd64/generate.sh                      | 2 +-
+ contrib/builder/deb/armhf/generate.sh                      | 2 +-
+ contrib/builder/deb/ppc64le/build.sh                       | 2 +-
+ contrib/builder/deb/ppc64le/generate.sh                    | 2 +-
+ contrib/builder/deb/s390x/build.sh                         | 2 +-
+ contrib/builder/deb/s390x/generate.sh                      | 2 +-
+ contrib/builder/rpm/amd64/build.sh                         | 2 +-
+ contrib/builder/rpm/amd64/generate.sh                      | 2 +-
+ contrib/builder/rpm/armhf/build.sh                         | 2 +-
+ contrib/builder/rpm/armhf/generate.sh                      | 2 +-
+ contrib/builder/rpm/ppc64le/build.sh                       | 2 +-
+ contrib/builder/rpm/ppc64le/generate.sh                    | 2 +-
+ contrib/completion/bash/docker                             | 2 +-
+ contrib/docker-machine-install-bundle.sh                   | 2 +-
+ contrib/download-frozen-image-v1.sh                        | 2 +-
+ contrib/download-frozen-image-v2.sh                        | 2 +-
+ contrib/gitdm/generate_aliases.sh                          | 2 +-
+ contrib/nuke-graph-directory.sh                            | 2 +-
+ contrib/reprepro/suites.sh                                 | 2 +-
+ docs/reference/builder.md                                  | 2 +-
+ hack/dind                                                  | 2 +-
+ hack/generate-authors.sh                                   | 2 +-
+ hack/make/.binary                                          | 2 +-
+ hack/make/.binary-setup                                    | 2 +-
+ hack/make/.detect-daemon-osarch                            | 2 +-
+ hack/make/.ensure-emptyfs                                  | 2 +-
+ hack/make/.go-autogen                                      | 2 +-
+ hack/make/.integration-daemon-setup                        | 2 +-
+ hack/make/.integration-daemon-start                        | 2 +-
+ hack/make/.integration-daemon-stop                         | 2 +-
+ hack/make/.integration-test-helpers                        | 2 +-
+ hack/make/binary                                           | 2 +-
+ hack/make/binary-client                                    | 2 +-
+ hack/make/binary-daemon                                    | 2 +-
+ hack/make/build-deb                                        | 2 +-
+ hack/make/build-integration-test-binary                    | 2 +-
+ hack/make/build-rpm                                        | 2 +-
+ hack/make/clean-apt-repo                                   | 2 +-
+ hack/make/clean-yum-repo                                   | 2 +-
+ hack/make/cover                                            | 2 +-
+ hack/make/cross                                            | 2 +-
+ hack/make/dynbinary                                        | 2 +-
+ hack/make/dynbinary-client                                 | 2 +-
+ hack/make/dynbinary-daemon                                 | 2 +-
+ hack/make/generate-index-listing                           | 2 +-
+ hack/make/install-binary                                   | 2 +-
+ hack/make/install-binary-client                            | 2 +-
+ hack/make/install-binary-daemon                            | 2 +-
+ hack/make/install-script                                   | 2 +-
+ hack/make/release-deb                                      | 2 +-
+ hack/make/release-rpm                                      | 2 +-
+ hack/make/run                                              | 2 +-
+ hack/make/sign-repos                                       | 2 +-
+ hack/make/test-deb-install                                 | 2 +-
+ hack/make/test-docker-py                                   | 2 +-
+ hack/make/test-install-script                              | 2 +-
+ hack/make/test-integration-cli                             | 2 +-
+ hack/make/test-integration-shell                           | 2 +-
+ hack/make/test-old-apt-repo                                | 2 +-
+ hack/make/test-unit                                        | 2 +-
+ hack/make/tgz                                              | 2 +-
+ hack/make/ubuntu                                           | 2 +-
+ hack/make/update-apt-repo                                  | 2 +-
+ hack/make/win                                              | 2 +-
+ hack/validate/.validate                                    | 2 +-
+ hack/validate/all                                          | 2 +-
+ hack/validate/changelog-date-descending                    | 2 +-
+ hack/validate/changelog-well-formed                        | 2 +-
+ hack/validate/compose-bindata                              | 2 +-
+ hack/validate/dco                                          | 2 +-
+ hack/validate/default                                      | 2 +-
+ hack/validate/default-seccomp                              | 2 +-
+ hack/validate/gofmt                                        | 2 +-
+ hack/validate/lint                                         | 2 +-
+ hack/validate/pkg-imports                                  | 2 +-
+ hack/validate/swagger                                      | 2 +-
+ hack/validate/swagger-gen                                  | 2 +-
+ hack/validate/test-imports                                 | 2 +-
+ hack/validate/toml                                         | 2 +-
+ hack/validate/vendor                                       | 2 +-
+ hack/validate/vet                                          | 2 +-
+ hack/vendor.sh                                             | 2 +-
+ integration-cli/fixtures/auth/docker-credential-shell-test | 2 +-
+ man/generate.sh                                            | 2 +-
+ man/md2man-all.sh                                          | 2 +-
+ 88 files changed, 88 insertions(+), 88 deletions(-)
+
+diff --git a/contrib/builder/deb/aarch64/build.sh b/contrib/builder/deb/aarch64/build.sh
+index 8271d9dc47..f8b25067bd 100755
+--- a/contrib/builder/deb/aarch64/build.sh
++++ b/contrib/builder/deb/aarch64/build.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
+diff --git a/contrib/builder/deb/aarch64/generate.sh b/contrib/builder/deb/aarch64/generate.sh
+index 7faa9177a0..d27d48ca92 100755
+--- a/contrib/builder/deb/aarch64/generate.sh
++++ b/contrib/builder/deb/aarch64/generate.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This file is used to auto-generate Dockerfiles for making debs via 'make deb'
+diff --git a/contrib/builder/deb/amd64/build.sh b/contrib/builder/deb/amd64/build.sh
+index 8271d9dc47..f8b25067bd 100755
+--- a/contrib/builder/deb/amd64/build.sh
++++ b/contrib/builder/deb/amd64/build.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
+diff --git a/contrib/builder/deb/amd64/generate.sh b/contrib/builder/deb/amd64/generate.sh
+index 8cd5a0edb3..b72893b842 100755
+--- a/contrib/builder/deb/amd64/generate.sh
++++ b/contrib/builder/deb/amd64/generate.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # usage: ./generate.sh [versions]
+diff --git a/contrib/builder/deb/armhf/generate.sh b/contrib/builder/deb/armhf/generate.sh
+index 15ffdab6ca..dcd135ada5 100755
+--- a/contrib/builder/deb/armhf/generate.sh
++++ b/contrib/builder/deb/armhf/generate.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # usage: ./generate.sh [versions]
+diff --git a/contrib/builder/deb/ppc64le/build.sh b/contrib/builder/deb/ppc64le/build.sh
+index 7d22e8c47f..83dbf943fc 100755
+--- a/contrib/builder/deb/ppc64le/build.sh
++++ b/contrib/builder/deb/ppc64le/build.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e 
+ 
+ cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
+diff --git a/contrib/builder/deb/ppc64le/generate.sh b/contrib/builder/deb/ppc64le/generate.sh
+index 979f7d873a..6f6f348b5a 100755
+--- a/contrib/builder/deb/ppc64le/generate.sh
++++ b/contrib/builder/deb/ppc64le/generate.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This file is used to auto-generate Dockerfiles for making debs via 'make deb'
+diff --git a/contrib/builder/deb/s390x/build.sh b/contrib/builder/deb/s390x/build.sh
+index 8271d9dc47..f8b25067bd 100755
+--- a/contrib/builder/deb/s390x/build.sh
++++ b/contrib/builder/deb/s390x/build.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
+diff --git a/contrib/builder/deb/s390x/generate.sh b/contrib/builder/deb/s390x/generate.sh
+index 87268f64e9..5cf05f32e0 100755
+--- a/contrib/builder/deb/s390x/generate.sh
++++ b/contrib/builder/deb/s390x/generate.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This file is used to auto-generate Dockerfiles for making debs via 'make deb'
+diff --git a/contrib/builder/rpm/amd64/build.sh b/contrib/builder/rpm/amd64/build.sh
+index 558f7ee0db..1e3565a34a 100755
+--- a/contrib/builder/rpm/amd64/build.sh
++++ b/contrib/builder/rpm/amd64/build.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
+diff --git a/contrib/builder/rpm/amd64/generate.sh b/contrib/builder/rpm/amd64/generate.sh
+index 2973fa71ab..32c6e9e517 100755
+--- a/contrib/builder/rpm/amd64/generate.sh
++++ b/contrib/builder/rpm/amd64/generate.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # usage: ./generate.sh [versions]
+diff --git a/contrib/builder/rpm/armhf/build.sh b/contrib/builder/rpm/armhf/build.sh
+index 558f7ee0db..1e3565a34a 100755
+--- a/contrib/builder/rpm/armhf/build.sh
++++ b/contrib/builder/rpm/armhf/build.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
+diff --git a/contrib/builder/rpm/armhf/generate.sh b/contrib/builder/rpm/armhf/generate.sh
+index 0024de30c2..f7c742ebdd 100755
+--- a/contrib/builder/rpm/armhf/generate.sh
++++ b/contrib/builder/rpm/armhf/generate.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ # vim: set ts=4 sw=4 noet :
+ 
+ set -e
+diff --git a/contrib/builder/rpm/ppc64le/build.sh b/contrib/builder/rpm/ppc64le/build.sh
+index 558f7ee0db..1e3565a34a 100755
+--- a/contrib/builder/rpm/ppc64le/build.sh
++++ b/contrib/builder/rpm/ppc64le/build.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ cd "$(dirname "$(readlink -f "$BASH_SOURCE")")"
+diff --git a/contrib/builder/rpm/ppc64le/generate.sh b/contrib/builder/rpm/ppc64le/generate.sh
+index e96d74e75c..b9f657c12d 100755
+--- a/contrib/builder/rpm/ppc64le/generate.sh
++++ b/contrib/builder/rpm/ppc64le/generate.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # usage: ./generate.sh [versions]
+diff --git a/contrib/completion/bash/docker b/contrib/completion/bash/docker
+index d572f99801..1f88064614 100644
+--- a/contrib/completion/bash/docker
++++ b/contrib/completion/bash/docker
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ #
+ # bash completion file for core docker commands
+ #
+diff --git a/contrib/docker-machine-install-bundle.sh b/contrib/docker-machine-install-bundle.sh
+index 9b90561aff..860598943b 100755
+--- a/contrib/docker-machine-install-bundle.sh
++++ b/contrib/docker-machine-install-bundle.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ #
+ # This script installs the bundle to Docker Machine instances, for the purpose
+ # of testing the latest Docker with Swarm mode enabled.
+diff --git a/contrib/download-frozen-image-v1.sh b/contrib/download-frozen-image-v1.sh
+index 29d7ff59fd..77c91d1f1b 100755
+--- a/contrib/download-frozen-image-v1.sh
++++ b/contrib/download-frozen-image-v1.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # hello-world                      latest              ef872312fe1b        3 months ago        910 B
+diff --git a/contrib/download-frozen-image-v2.sh b/contrib/download-frozen-image-v2.sh
+index 6d0a8d6e8a..37b5038938 100755
+--- a/contrib/download-frozen-image-v2.sh
++++ b/contrib/download-frozen-image-v2.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -eo pipefail
+ 
+ # hello-world                      latest              ef872312fe1b        3 months ago        910 B
+diff --git a/contrib/gitdm/generate_aliases.sh b/contrib/gitdm/generate_aliases.sh
+index dd6a564995..dfff5ff204 100755
+--- a/contrib/gitdm/generate_aliases.sh
++++ b/contrib/gitdm/generate_aliases.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ #
+ # This script generates a gitdm compatible email aliases file from a git
+diff --git a/contrib/nuke-graph-directory.sh b/contrib/nuke-graph-directory.sh
+index fbe85e1e21..3d2f49e869 100755
+--- a/contrib/nuke-graph-directory.sh
++++ b/contrib/nuke-graph-directory.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ dir="$1"
+diff --git a/contrib/reprepro/suites.sh b/contrib/reprepro/suites.sh
+index 9ecf99d465..badb34af9d 100755
+--- a/contrib/reprepro/suites.sh
++++ b/contrib/reprepro/suites.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ cd "$(dirname "$BASH_SOURCE")/../.."
+diff --git a/docs/reference/builder.md b/docs/reference/builder.md
+index 8dfc4d1fb9..8c39b512c8 100644
+--- a/docs/reference/builder.md
++++ b/docs/reference/builder.md
+@@ -1029,7 +1029,7 @@ the final executable receives the Unix signals by using `exec` and `gosu`
+ commands:
+ 
+ ```bash
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ if [ "$1" = 'postgres' ]; then
+diff --git a/hack/dind b/hack/dind
+index 082c3d31fe..3254f9dbe7 100755
+--- a/hack/dind
++++ b/hack/dind
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # DinD: a wrapper script which allows docker to be run inside a docker container.
+diff --git a/hack/generate-authors.sh b/hack/generate-authors.sh
+index e78a97f962..680bdb7b3f 100755
+--- a/hack/generate-authors.sh
++++ b/hack/generate-authors.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ cd "$(dirname "$(readlink -f "$BASH_SOURCE")")/.."
+diff --git a/hack/make/.binary b/hack/make/.binary
+index f5c35c3b7e..01028c27e6 100644
+--- a/hack/make/.binary
++++ b/hack/make/.binary
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ BINARY_NAME="$BINARY_SHORT_NAME-$VERSION"
+diff --git a/hack/make/.binary-setup b/hack/make/.binary-setup
+index b9f8ce2517..b4bd66872c 100644
+--- a/hack/make/.binary-setup
++++ b/hack/make/.binary-setup
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ DOCKER_CLIENT_BINARY_NAME='docker'
+ DOCKER_DAEMON_BINARY_NAME='dockerd'
+diff --git a/hack/make/.detect-daemon-osarch b/hack/make/.detect-daemon-osarch
+index d6b41c8666..efa3be5e9d 100644
+--- a/hack/make/.detect-daemon-osarch
++++ b/hack/make/.detect-daemon-osarch
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ docker-version-osarch() {
+diff --git a/hack/make/.ensure-emptyfs b/hack/make/.ensure-emptyfs
+index fca5c314fd..7b00b9d455 100644
+--- a/hack/make/.ensure-emptyfs
++++ b/hack/make/.ensure-emptyfs
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ if ! docker inspect -t image emptyfs &> /dev/null; then
+diff --git a/hack/make/.go-autogen b/hack/make/.go-autogen
+index 4d26052bb7..ec20180672 100644
+--- a/hack/make/.go-autogen
++++ b/hack/make/.go-autogen
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ rm -rf autogen
+ 
+diff --git a/hack/make/.integration-daemon-setup b/hack/make/.integration-daemon-setup
+index 0efde717fc..d0ec03e9e9 100644
+--- a/hack/make/.integration-daemon-setup
++++ b/hack/make/.integration-daemon-setup
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ bundle .detect-daemon-osarch
+diff --git a/hack/make/.integration-daemon-start b/hack/make/.integration-daemon-start
+index b96979bdb2..0bc8b968f9 100644
+--- a/hack/make/.integration-daemon-start
++++ b/hack/make/.integration-daemon-start
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ # see test-integration-cli for example usage of this script
+ 
+diff --git a/hack/make/.integration-daemon-stop b/hack/make/.integration-daemon-stop
+index 03c1b14689..591a8d6bec 100644
+--- a/hack/make/.integration-daemon-stop
++++ b/hack/make/.integration-daemon-stop
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ if [ ! "$(go env GOOS)" = 'windows' ]; then
+ 	trap - EXIT # reset EXIT trap applied in .integration-daemon-start
+diff --git a/hack/make/.integration-test-helpers b/hack/make/.integration-test-helpers
+index f81a9ccda5..d9ba88009f 100644
+--- a/hack/make/.integration-test-helpers
++++ b/hack/make/.integration-test-helpers
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ : ${TEST_REPEAT:=0}
+ 
+diff --git a/hack/make/binary b/hack/make/binary
+index 88b22cd462..9b89dbe668 100644
+--- a/hack/make/binary
++++ b/hack/make/binary
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ rm -rf "$DEST"
+ 
+diff --git a/hack/make/binary-client b/hack/make/binary-client
+index 1731fea8b0..59c1bc0e07 100644
+--- a/hack/make/binary-client
++++ b/hack/make/binary-client
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ [ -z "$KEEPDEST" ] && \
+diff --git a/hack/make/binary-daemon b/hack/make/binary-daemon
+index e255543c16..a6b322b554 100644
+--- a/hack/make/binary-daemon
++++ b/hack/make/binary-daemon
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ [ -z "$KEEPDEST" ] && \
+diff --git a/hack/make/build-deb b/hack/make/build-deb
+index 33f924040c..a698323535 100644
+--- a/hack/make/build-deb
++++ b/hack/make/build-deb
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # subshell so that we can export PATH and TZ without breaking other things
+diff --git a/hack/make/build-integration-test-binary b/hack/make/build-integration-test-binary
+index 1d9044a944..29da577f61 100644
+--- a/hack/make/build-integration-test-binary
++++ b/hack/make/build-integration-test-binary
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ rm -rf "$DEST"
+diff --git a/hack/make/build-rpm b/hack/make/build-rpm
+index f5e2c7240a..eeda82ee61 100644
+--- a/hack/make/build-rpm
++++ b/hack/make/build-rpm
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # subshell so that we can export PATH and TZ without breaking other things
+diff --git a/hack/make/clean-apt-repo b/hack/make/clean-apt-repo
+index 1c37d98e40..e823cb537f 100755
+--- a/hack/make/clean-apt-repo
++++ b/hack/make/clean-apt-repo
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This script cleans the experimental pool for the apt repo.
+diff --git a/hack/make/clean-yum-repo b/hack/make/clean-yum-repo
+index 1cafbbd97f..012689a965 100755
+--- a/hack/make/clean-yum-repo
++++ b/hack/make/clean-yum-repo
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This script cleans the experimental pool for the yum repo.
+diff --git a/hack/make/cover b/hack/make/cover
+index 08e28e3fea..4a37995f69 100644
+--- a/hack/make/cover
++++ b/hack/make/cover
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ bundle_cover() {
+diff --git a/hack/make/cross b/hack/make/cross
+index 6d672b17c3..d4dbb369a6 100644
+--- a/hack/make/cross
++++ b/hack/make/cross
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # explicit list of os/arch combos that support being a daemon
+diff --git a/hack/make/dynbinary b/hack/make/dynbinary
+index 1a435dc4bf..998f92acfb 100644
+--- a/hack/make/dynbinary
++++ b/hack/make/dynbinary
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This script exists as backwards compatibility for CI
+diff --git a/hack/make/dynbinary-client b/hack/make/dynbinary-client
+index e4b7741848..61fb28ede3 100644
+--- a/hack/make/dynbinary-client
++++ b/hack/make/dynbinary-client
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ (
+diff --git a/hack/make/dynbinary-daemon b/hack/make/dynbinary-daemon
+index 090a916f65..1b7dbb45a8 100644
+--- a/hack/make/dynbinary-daemon
++++ b/hack/make/dynbinary-daemon
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ (
+diff --git a/hack/make/generate-index-listing b/hack/make/generate-index-listing
+index ec44171f81..7094ad7dbd 100755
+--- a/hack/make/generate-index-listing
++++ b/hack/make/generate-index-listing
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This script generates index files for the directory structure
+diff --git a/hack/make/install-binary b/hack/make/install-binary
+index 82cbc79933..4051c9cab2 100644
+--- a/hack/make/install-binary
++++ b/hack/make/install-binary
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ set -e
+ rm -rf "$DEST"
+diff --git a/hack/make/install-binary-client b/hack/make/install-binary-client
+index 6c80452659..57938eb30c 100644
+--- a/hack/make/install-binary-client
++++ b/hack/make/install-binary-client
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ set -e
+ rm -rf "$DEST"
+diff --git a/hack/make/install-binary-daemon b/hack/make/install-binary-daemon
+index 08a2d69b96..12126ffacc 100644
+--- a/hack/make/install-binary-daemon
++++ b/hack/make/install-binary-daemon
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ set -e
+ rm -rf "$DEST"
+diff --git a/hack/make/install-script b/hack/make/install-script
+index feadac2f38..558ae52e63 100644
+--- a/hack/make/install-script
++++ b/hack/make/install-script
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This script modifies the install.sh script for domains and keys other than
+diff --git a/hack/make/release-deb b/hack/make/release-deb
+index 0df37050f3..acf4901d6e 100755
+--- a/hack/make/release-deb
++++ b/hack/make/release-deb
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This script creates the apt repos for the .deb files generated by hack/make/build-deb
+diff --git a/hack/make/release-rpm b/hack/make/release-rpm
+index d7e3ec4f8a..477d15bee9 100755
+--- a/hack/make/release-rpm
++++ b/hack/make/release-rpm
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This script creates the yum repos for the .rpm files generated by hack/make/build-rpm
+diff --git a/hack/make/run b/hack/make/run
+index 37cfd53b5f..366fea6f44 100644
+--- a/hack/make/run
++++ b/hack/make/run
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ set -e
+ rm -rf "$DEST"
+diff --git a/hack/make/sign-repos b/hack/make/sign-repos
+index 6ed1606885..61dbd7acce 100755
+--- a/hack/make/sign-repos
++++ b/hack/make/sign-repos
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ # This script signs the deliverables from release-deb and release-rpm
+ # with a designated GPG key.
+diff --git a/hack/make/test-deb-install b/hack/make/test-deb-install
+index aec5847600..bc8e40818d 100755
+--- a/hack/make/test-deb-install
++++ b/hack/make/test-deb-install
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ # This script is used for testing install.sh and that it works for
+ # each of component of our apt and yum repos
+ set -e
+diff --git a/hack/make/test-docker-py b/hack/make/test-docker-py
+index fcacc16436..b30879e3a0 100644
+--- a/hack/make/test-docker-py
++++ b/hack/make/test-docker-py
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ source hack/make/.integration-test-helpers
+diff --git a/hack/make/test-install-script b/hack/make/test-install-script
+index 4782cbea88..aec1287fd3 100755
+--- a/hack/make/test-install-script
++++ b/hack/make/test-install-script
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ # This script is used for testing install.sh and that it works for
+ # each of component of our apt and yum repos
+ set -e
+diff --git a/hack/make/test-integration-cli b/hack/make/test-integration-cli
+index 689a5285f3..c8137f4313 100755
+--- a/hack/make/test-integration-cli
++++ b/hack/make/test-integration-cli
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ source hack/make/.integration-test-helpers
+diff --git a/hack/make/test-integration-shell b/hack/make/test-integration-shell
+index 86df9654a3..2201f5eb37 100644
+--- a/hack/make/test-integration-shell
++++ b/hack/make/test-integration-shell
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ bundle .integration-daemon-start
+ bundle .integration-daemon-setup
+diff --git a/hack/make/test-old-apt-repo b/hack/make/test-old-apt-repo
+index bb20128e30..e92b20ef06 100755
+--- a/hack/make/test-old-apt-repo
++++ b/hack/make/test-old-apt-repo
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ versions=( 1.3.3 1.4.1 1.5.0 1.6.2 )
+diff --git a/hack/make/test-unit b/hack/make/test-unit
+index f263345ce6..1c2ba3ff3b 100644
+--- a/hack/make/test-unit
++++ b/hack/make/test-unit
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # Run Docker's test suite, including sub-packages, and store their output as a bundle
+diff --git a/hack/make/tgz b/hack/make/tgz
+index 3ccd93fa01..4af2e77c98 100644
+--- a/hack/make/tgz
++++ b/hack/make/tgz
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ CROSS="$DEST/../cross"
+ 
+diff --git a/hack/make/ubuntu b/hack/make/ubuntu
+index 8de5d9ceac..ad3f1d78bb 100644
+--- a/hack/make/ubuntu
++++ b/hack/make/ubuntu
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ PKGVERSION="${VERSION//-/'~'}"
+ # if we have a "-dev" suffix or have change in Git, let's make this package version more complex so it works better
+diff --git a/hack/make/update-apt-repo b/hack/make/update-apt-repo
+index 7354a2ecff..3a80c94ca3 100755
+--- a/hack/make/update-apt-repo
++++ b/hack/make/update-apt-repo
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # This script updates the apt repo in $DOCKER_RELEASE_DIR/apt/repo.
+diff --git a/hack/make/win b/hack/make/win
+index f9f4111276..bc6d5108b8 100644
+--- a/hack/make/win
++++ b/hack/make/win
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # explicit list of os/arch combos that support being a daemon
+diff --git a/hack/validate/.validate b/hack/validate/.validate
+index defa981865..32cb6b6d64 100644
+--- a/hack/validate/.validate
++++ b/hack/validate/.validate
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ set -e -o pipefail
+ 
+diff --git a/hack/validate/all b/hack/validate/all
+index 308af47263..9d95c2d2fd 100755
+--- a/hack/validate/all
++++ b/hack/validate/all
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ #
+ # Run all validation
+ 
+diff --git a/hack/validate/changelog-date-descending b/hack/validate/changelog-date-descending
+index 2b4556deb3..b9c3368ca6 100755
+--- a/hack/validate/changelog-date-descending
++++ b/hack/validate/changelog-date-descending
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ changelogFile=${1:-CHANGELOG.md}
+ 
+diff --git a/hack/validate/changelog-well-formed b/hack/validate/changelog-well-formed
+index d75c1dd215..dc1b68b4e0 100755
+--- a/hack/validate/changelog-well-formed
++++ b/hack/validate/changelog-well-formed
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ changelogFile=${1:-CHANGELOG.md}
+ 
+diff --git a/hack/validate/compose-bindata b/hack/validate/compose-bindata
+index f87728259e..a565da4601 100755
+--- a/hack/validate/compose-bindata
++++ b/hack/validate/compose-bindata
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/validate/dco b/hack/validate/dco
+index 754ce8faec..f391001601 100755
+--- a/hack/validate/dco
++++ b/hack/validate/dco
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/validate/default b/hack/validate/default
+index 89e9115816..e243f43831 100755
+--- a/hack/validate/default
++++ b/hack/validate/default
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ #
+ # Run default validation, exclude vendor because it's slow
+ 
+diff --git a/hack/validate/default-seccomp b/hack/validate/default-seccomp
+index 8fe8435618..24cbf00d24 100755
+--- a/hack/validate/default-seccomp
++++ b/hack/validate/default-seccomp
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/validate/gofmt b/hack/validate/gofmt
+index 2040afa09e..42ba052b74 100755
+--- a/hack/validate/gofmt
++++ b/hack/validate/gofmt
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/validate/lint b/hack/validate/lint
+index 4ac0a33b20..b4799e796b 100755
+--- a/hack/validate/lint
++++ b/hack/validate/lint
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/validate/pkg-imports b/hack/validate/pkg-imports
+index 9e4ea74da0..a9aab6456f 100755
+--- a/hack/validate/pkg-imports
++++ b/hack/validate/pkg-imports
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+diff --git a/hack/validate/swagger b/hack/validate/swagger
+index e754fb8cb9..0b3c2719d8 100755
+--- a/hack/validate/swagger
++++ b/hack/validate/swagger
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/validate/swagger-gen b/hack/validate/swagger-gen
+index 008abc7e0d..451ea3f713 100755
+--- a/hack/validate/swagger-gen
++++ b/hack/validate/swagger-gen
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/validate/test-imports b/hack/validate/test-imports
+index 373caa2f29..0e836a31c0 100755
+--- a/hack/validate/test-imports
++++ b/hack/validate/test-imports
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ # Make sure we're not using gos' Testing package any more in integration-cli
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+diff --git a/hack/validate/toml b/hack/validate/toml
+index a0cb158dbd..d5b2ce1c29 100755
+--- a/hack/validate/toml
++++ b/hack/validate/toml
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/validate/vendor b/hack/validate/vendor
+index 0cb5aabdfa..7133e5cb0e 100755
+--- a/hack/validate/vendor
++++ b/hack/validate/vendor
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/validate/vet b/hack/validate/vet
+index 64760489ea..95dc7a718f 100755
+--- a/hack/validate/vet
++++ b/hack/validate/vet
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ export SCRIPTDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+ source "${SCRIPTDIR}/.validate"
+diff --git a/hack/vendor.sh b/hack/vendor.sh
+index 9a4d038539..a7a571e7b7 100755
+--- a/hack/vendor.sh
++++ b/hack/vendor.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ # This file is just wrapper around vndr (github.com/LK4D4/vndr) tool.
+ # For updating dependencies you should change `vendor.conf` file in root of the
+diff --git a/integration-cli/fixtures/auth/docker-credential-shell-test b/integration-cli/fixtures/auth/docker-credential-shell-test
+index a7be56b2f2..97b3f1483e 100755
+--- a/integration-cli/fixtures/auth/docker-credential-shell-test
++++ b/integration-cli/fixtures/auth/docker-credential-shell-test
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ 
+ set -e
+ 
+diff --git a/man/generate.sh b/man/generate.sh
+index c97edb440d..905b2d7baf 100755
+--- a/man/generate.sh
++++ b/man/generate.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ #
+ # Generate man pages for docker/docker
+ #
+diff --git a/man/md2man-all.sh b/man/md2man-all.sh
+index 97c65c93bc..46c7b8f08e 100755
+--- a/man/md2man-all.sh
++++ b/man/md2man-all.sh
+@@ -1,4 +1,4 @@
+-#!/bin/bash
++#!/usr/bin/env bash
+ set -e
+ 
+ # get into this script's directory
+-- 
+2.34.1
+

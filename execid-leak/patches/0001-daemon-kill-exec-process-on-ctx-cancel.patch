@@ -1,0 +1,148 @@
+From 4b84a3321723a849295d5cbf7342ec36077f9179 Mon Sep 17 00:00:00 2001
+From: Cory Snider <csnider@mirantis.com>
+Date: Mon, 22 Aug 2022 22:34:51 -0400
+Subject: [PATCH] daemon: kill exec process on ctx cancel
+
+Terminating the exec process when the context is canceled has been
+broken since Docker v17.11 so nobody has been able to depend upon that
+behaviour in five years of releases. We are thus free from backwards-
+compatibility constraints.
+
+Co-authored-by: Nicolas De Loof <nicolas.deloof@gmail.com>
+Co-authored-by: Sebastiaan van Stijn <github@gone.nl>
+Signed-off-by: Nicolas De Loof <nicolas.deloof@gmail.com>
+Signed-off-by: Cory Snider <csnider@mirantis.com>
+Signed-off-by: Sebastiaan van Stijn <github@gone.nl>
+---
+ daemon/exec.go                       | 29 ++++++++++------------
+ daemon/health.go                     |  4 +--
+ integration/container/health_test.go | 37 ++++++++++++++++++++++++++++
+ 3 files changed, 52 insertions(+), 18 deletions(-)
+
+diff --git a/daemon/exec.go b/daemon/exec.go
+index 08687760a7..4675ee4557 100644
+--- a/daemon/exec.go
++++ b/daemon/exec.go
+@@ -23,9 +23,6 @@ import (
+ 	"github.com/sirupsen/logrus"
+ )
+ 
+-// Seconds to wait after sending TERM before trying KILL
+-const termProcessTimeout = 10 * time.Second
+-
+ func (daemon *Daemon) registerExecCommand(container *container.Container, config *exec.Config) {
+ 	// Storing execs in container in order to kill them gracefully whenever the container is stopped or removed.
+ 	container.ExecCommands.Add(config.ID, config)
+@@ -272,7 +269,10 @@ func (daemon *Daemon) ContainerExecStart(ctx context.Context, name string, optio
+ 		CloseStdin: true,
+ 	}
+ 	ec.StreamConfig.AttachStreams(&attachConfig)
+-	attachErr := ec.StreamConfig.CopyStreams(ctx, &attachConfig)
++	// using context.Background() so that attachErr does not race ctx.Done().
++	copyCtx, cancel := context.WithCancel(context.Background())
++	defer cancel()
++	attachErr := ec.StreamConfig.CopyStreams(copyCtx, &attachConfig)
+ 
+ 	// Synchronize with libcontainerd event loop
+ 	ec.Lock()
+@@ -292,18 +292,15 @@ func (daemon *Daemon) ContainerExecStart(ctx context.Context, name string, optio
+ 
+ 	select {
+ 	case <-ctx.Done():
+-		logrus.Debugf("Sending TERM signal to process %v in container %v", name, c.ID)
+-		daemon.containerd.SignalProcess(ctx, c.ID, name, signal.SignalMap["TERM"])
+-
+-		timeout := time.NewTimer(termProcessTimeout)
+-		defer timeout.Stop()
+-
+-		select {
+-		case <-timeout.C:
+-			logrus.Infof("Container %v, process %v failed to exit within %v of signal TERM - using the force", c.ID, name, termProcessTimeout)
+-			daemon.containerd.SignalProcess(ctx, c.ID, name, signal.SignalMap["KILL"])
+-		case <-attachErr:
+-			// TERM signal worked
++		log := logrus.
++			WithField("container", c.ID).
++			WithField("exec", name)
++		log.Debug("Sending KILL signal to container process")
++		sigCtx, cancelFunc := context.WithTimeout(context.Background(), 30*time.Second)
++		defer cancelFunc()
++		err := daemon.containerd.SignalProcess(sigCtx, c.ID, name, signal.SignalMap["KILL"])
++		if err != nil {
++			log.WithError(err).Error("Could not send KILL signal to container process")
+ 		}
+ 		return ctx.Err()
+ 	case err := <-attachErr:
+diff --git a/daemon/health.go b/daemon/health.go
+index 335f91e0ec..5f5779526b 100644
+--- a/daemon/health.go
++++ b/daemon/health.go
+@@ -133,8 +133,8 @@ func (p *cmdProbe) run(ctx context.Context, d *Daemon, cntr *container.Container
+ 	case <-tm.C:
+ 		cancelProbe()
+ 		logrus.WithContext(ctx).Debugf("Health check for container %s taking too long", cntr.ID)
+-		// Wait for probe to exit (it might take a while to respond to the TERM
+-		// signal and we don't want dying probes to pile up).
++		// Wait for probe to exit (it might take some time to call containerd to kill
++		// the process and we don't want dying probes to pile up).
+ 		<-execErr
+ 		return &types.HealthcheckResult{
+ 			ExitCode: -1,
+diff --git a/integration/container/health_test.go b/integration/container/health_test.go
+index ad0245c6a8..c55e9e9180 100644
+--- a/integration/container/health_test.go
++++ b/integration/container/health_test.go
+@@ -2,6 +2,7 @@ package container // import "github.com/docker/docker/integration/container"
+ 
+ import (
+ 	"context"
++	"fmt"
+ 	"testing"
+ 	"time"
+ 
+@@ -93,6 +94,42 @@ while true; do sleep 1; done
+ 	poll.WaitOn(t, pollForHealthStatus(ctxPoll, client, id, "healthy"), poll.WithDelay(100*time.Millisecond))
+ }
+ 
++// TestHealthCheckProcessKilled verifies that health-checks exec get killed on time-out.
++func TestHealthCheckProcessKilled(t *testing.T) {
++	skip.If(t, testEnv.RuntimeIsWindowsContainerd(), "FIXME: Broken on Windows + containerd combination")
++	defer setupTest(t)()
++	ctx := context.Background()
++	apiClient := testEnv.APIClient()
++
++	cID := container.Run(ctx, t, apiClient, func(c *container.TestContainerConfig) {
++		c.Config.Healthcheck = &containertypes.HealthConfig{
++			Test:     []string{"CMD", "sh", "-c", "sleep 60"},
++			Interval: 100 * time.Millisecond,
++			Timeout:  50 * time.Millisecond,
++			Retries:  1,
++		}
++	})
++	poll.WaitOn(t, pollForHealthCheckLog(ctx, apiClient, cID, "Health check exceeded timeout (50ms)"))
++}
++
++func pollForHealthCheckLog(ctx context.Context, client client.APIClient, containerID string, expected string) func(log poll.LogT) poll.Result {
++	return func(log poll.LogT) poll.Result {
++		inspect, err := client.ContainerInspect(ctx, containerID)
++		if err != nil {
++			return poll.Error(err)
++		}
++		healthChecksTotal := len(inspect.State.Health.Log)
++		if healthChecksTotal > 0 {
++			output := inspect.State.Health.Log[healthChecksTotal-1].Output
++			if output == expected {
++				return poll.Success()
++			}
++			return poll.Error(fmt.Errorf("expected %q, got %q", expected, output))
++		}
++		return poll.Continue("waiting for container healthcheck logs")
++	}
++}
++
+ func pollForHealthStatus(ctx context.Context, client client.APIClient, containerID string, healthStatus string) func(log poll.LogT) poll.Result {
+ 	return func(log poll.LogT) poll.Result {
+ 		inspect, err := client.ContainerInspect(ctx, containerID)
+-- 
+2.34.1
+

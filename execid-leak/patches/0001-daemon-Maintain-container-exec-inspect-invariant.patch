@@ -1,0 +1,135 @@
+From a09f8dbe6eabd5bf1e9740bc09a721bfaeaa2583 Mon Sep 17 00:00:00 2001
+From: Cory Snider <csnider@mirantis.com>
+Date: Wed, 24 Aug 2022 19:35:07 -0400
+Subject: [PATCH] daemon: Maintain container exec-inspect invariant
+
+We have integration tests which assert the invariant that a
+GET /containers/{id}/json response lists only IDs of execs which are in
+the Running state, according to GET /exec/{id}/json. The invariant could
+be violated if those requests were to race the handling of the exec's
+task-exit event. The coarse-grained locking of the container ExecStore
+when starting an exec task was accidentally synchronizing
+(*Daemon).ProcessEvent and (*Daemon).ContainerExecInspect to it just
+enough to make it improbable for the integration tests to catch the
+invariant violation on execs which exit immediately. Removing the
+unnecessary locking made the underlying race condition more likely for
+the tests to hit.
+
+Maintain the invariant by deleting the exec from its container's
+ExecCommands before clearing its Running flag. Additionally, fix other
+potential data races with execs by ensuring that the ExecConfig lock is
+held whenever a mutable field is read from or written to.
+
+Signed-off-by: Cory Snider <csnider@mirantis.com>
+---
+ daemon/exec.go    |  4 ++--
+ daemon/health.go  | 15 ++++++++++++---
+ daemon/inspect.go |  2 ++
+ daemon/monitor.go | 11 +++++++----
+ 4 files changed, 23 insertions(+), 9 deletions(-)
+
+diff --git a/daemon/exec.go b/daemon/exec.go
+index 54640a47aa..d4e5ab3df2 100644
+--- a/daemon/exec.go
++++ b/daemon/exec.go
+@@ -183,6 +183,7 @@ func (daemon *Daemon) ContainerExecStart(ctx context.Context, name string, optio
+ 	defer func() {
+ 		if err != nil {
+ 			ec.Lock()
++			ec.Container.ExecCommands.Delete(ec.ID)
+ 			ec.Running = false
+ 			exitCode := 126
+ 			ec.ExitCode = &exitCode
+@@ -190,7 +191,6 @@ func (daemon *Daemon) ContainerExecStart(ctx context.Context, name string, optio
+ 				logrus.Errorf("failed to cleanup exec %s streams: %s", ec.Container.ID, err)
+ 			}
+ 			ec.Unlock()
+-			ec.Container.ExecCommands.Delete(ec.ID)
+ 		}
+ 	}()
+ 
+@@ -287,7 +287,7 @@ func (daemon *Daemon) ContainerExecStart(ctx context.Context, name string, optio
+ 	// close the chan to notify readiness
+ 	close(ec.Started)
+ 	if err != nil {
+-		ec.Unlock()
++		defer ec.Unlock()
+ 		return translateContainerdStartErr(ec.Entrypoint, ec.SetExitCode, err)
+ 	}
+ 	ec.Unlock()
+diff --git a/daemon/health.go b/daemon/health.go
+index 0a2d7179e8..2d94b3b1d9 100644
+--- a/daemon/health.go
++++ b/daemon/health.go
+@@ -149,14 +149,23 @@ func (p *cmdProbe) run(ctx context.Context, d *Daemon, cntr *container.Container
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	if info.ExitCode == nil {
+-		return nil, fmt.Errorf("healthcheck for container %s has no exit code", cntr.ID)
++	exitCode, err := func() (int, error) {
++		info.Lock()
++		defer info.Unlock()
++		if info.ExitCode == nil {
++			info.Unlock()
++			return 0, fmt.Errorf("healthcheck for container %s has no exit code", cntr.ID)
++		}
++		return *info.ExitCode, nil
++	}()
++	if err != nil {
++		return nil, err
+ 	}
+ 	// Note: Go's json package will handle invalid UTF-8 for us
+ 	out := output.String()
+ 	return &types.HealthcheckResult{
+ 		End:      time.Now(),
+-		ExitCode: *info.ExitCode,
++		ExitCode: exitCode,
+ 		Output:   out,
+ 	}, nil
+ }
+diff --git a/daemon/inspect.go b/daemon/inspect.go
+index f6bd9cf131..9e8f046c2a 100644
+--- a/daemon/inspect.go
++++ b/daemon/inspect.go
+@@ -218,6 +218,8 @@ func (daemon *Daemon) ContainerExecInspect(id string) (*backend.ExecInspect, err
+ 		return nil, errExecNotFound(id)
+ 	}
+ 
++	e.Lock()
++	defer e.Unlock()
+ 	pc := inspectExecProcessConfig(e)
+ 	var pid int
+ 	if e.Process != nil {
+diff --git a/daemon/monitor.go b/daemon/monitor.go
+index 1fcb3f8f7f..1e96c1d9d8 100644
+--- a/daemon/monitor.go
++++ b/daemon/monitor.go
+@@ -163,6 +163,13 @@ func (daemon *Daemon) ProcessEvent(id string, e libcontainerdtypes.EventType, ei
+ 			ec := int(ei.ExitCode)
+ 			execConfig.Lock()
+ 			defer execConfig.Unlock()
++
++			// Remove the exec command from the container's store only and not the
++			// daemon's store so that the exec command can be inspected. Remove it
++			// before mutating execConfig to maintain the invariant that
++			// c.ExecCommands only contain execs in the Running state.
++			c.ExecCommands.Delete(execConfig.ID)
++
+ 			execConfig.ExitCode = &ec
+ 			execConfig.Running = false
+ 
+@@ -174,10 +181,6 @@ func (daemon *Daemon) ProcessEvent(id string, e libcontainerdtypes.EventType, ei
+ 				logrus.Errorf("failed to cleanup exec %s streams: %s", c.ID, err)
+ 			}
+ 
+-			// remove the exec command from the container's store only and not the
+-			// daemon's store so that the exec command can be inspected.
+-			c.ExecCommands.Delete(execConfig.ID)
+-
+ 			exitCode = ec
+ 
+ 			go func() {
+-- 
+2.34.1
+

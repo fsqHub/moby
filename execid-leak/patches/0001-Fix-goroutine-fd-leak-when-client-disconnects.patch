@@ -1,0 +1,403 @@
+From 2d134c5abd1eb335c89924a4c8bc9431c35545bb Mon Sep 17 00:00:00 2001
+From: Brian Goff <cpuguy83@gmail.com>
+Date: Tue, 21 Feb 2023 22:32:15 +0000
+Subject: [PATCH] Fix goroutine/fd leak when client disconnects
+
+In cases where the client disconnects and there is nothing to read from
+a stdio stream after that disconnect, the copy goroutines and file
+descriptors are leaked because `io.Copy` is just blocked waiting for
+data from the container's I/O stream.
+
+This fix only applies to Linux.
+Windows will need a separate fix.
+
+Signed-off-by: Brian Goff <cpuguy83@gmail.com>
+---
+ .../router/container/container_routes.go      |  8 +-
+ api/server/router/container/notify_linux.go   | 54 +++++++++++++
+ .../router/container/notify_unsupported.go    | 10 +++
+ api/types/backend/backend.go                  |  2 +-
+ daemon/attach.go                              | 19 ++++-
+ integration/container/attach_test.go          | 60 ++++++++++++++
+ integration/internal/system/goroutines.go     | 78 +++++++++++++++++++
+ internal/unix_noeintr/epoll_linux.go          | 37 +++++++++
+ 8 files changed, 264 insertions(+), 4 deletions(-)
+ create mode 100644 api/server/router/container/notify_linux.go
+ create mode 100644 api/server/router/container/notify_unsupported.go
+ create mode 100644 integration/internal/system/goroutines.go
+ create mode 100644 internal/unix_noeintr/epoll_linux.go
+
+diff --git a/api/server/router/container/container_routes.go b/api/server/router/container/container_routes.go
+index 3872028652..2b1ec0d5f0 100644
+--- a/api/server/router/container/container_routes.go
++++ b/api/server/router/container/container_routes.go
+@@ -775,7 +775,7 @@ func (s *containerRouter) postContainersAttach(ctx context.Context, w http.Respo
+ 	}
+ 
+ 	contentType := types.MediaTypeRawStream
+-	setupStreams := func(multiplexed bool) (io.ReadCloser, io.Writer, io.Writer, error) {
++	setupStreams := func(multiplexed bool, cancel func()) (io.ReadCloser, io.Writer, io.Writer, error) {
+ 		conn, _, err := hijacker.Hijack()
+ 		if err != nil {
+ 			return nil, nil, nil, err
+@@ -793,6 +793,8 @@ func (s *containerRouter) postContainersAttach(ctx context.Context, w http.Respo
+ 			fmt.Fprintf(conn, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.docker.raw-stream\r\n\r\n")
+ 		}
+ 
++		go notifyClosed(ctx, conn, cancel)
++
+ 		closer := func() error {
+ 			httputils.CloseStreams(conn)
+ 			return nil
+@@ -841,7 +843,7 @@ func (s *containerRouter) wsContainersAttach(ctx context.Context, w http.Respons
+ 
+ 	version := httputils.VersionFromContext(ctx)
+ 
+-	setupStreams := func(multiplexed bool) (io.ReadCloser, io.Writer, io.Writer, error) {
++	setupStreams := func(multiplexed bool, cancel func()) (io.ReadCloser, io.Writer, io.Writer, error) {
+ 		wsChan := make(chan *websocket.Conn)
+ 		h := func(conn *websocket.Conn) {
+ 			wsChan <- conn
+@@ -860,6 +862,8 @@ func (s *containerRouter) wsContainersAttach(ctx context.Context, w http.Respons
+ 		if versions.GreaterThanOrEqualTo(version, "1.28") {
+ 			conn.PayloadType = websocket.BinaryFrame
+ 		}
++
++		// TODO: Close notifications
+ 		return conn, conn, conn, nil
+ 	}
+ 
+diff --git a/api/server/router/container/notify_linux.go b/api/server/router/container/notify_linux.go
+new file mode 100644
+index 0000000000..5ec02bebf4
+--- /dev/null
++++ b/api/server/router/container/notify_linux.go
+@@ -0,0 +1,54 @@
++package container
++
++import (
++	"context"
++	"net"
++	"syscall"
++
++	"github.com/containerd/log"
++	"github.com/docker/docker/internal/unix_noeintr"
++	"golang.org/x/sys/unix"
++)
++
++func notifyClosed(ctx context.Context, conn net.Conn, notify func()) {
++	sc, ok := conn.(syscall.Conn)
++	if !ok {
++		log.G(ctx).Debug("notifyClosed: conn does not support close notifications")
++		return
++	}
++
++	rc, err := sc.SyscallConn()
++	if err != nil {
++		log.G(ctx).WithError(err).Warn("notifyClosed: failed get raw conn for close notifications")
++		return
++	}
++
++	epFd, err := unix_noeintr.EpollCreate()
++	if err != nil {
++		log.G(ctx).WithError(err).Warn("notifyClosed: failed to create epoll fd")
++		return
++	}
++	defer unix.Close(epFd)
++
++	err = rc.Control(func(fd uintptr) {
++		err := unix_noeintr.EpollCtl(epFd, unix.EPOLL_CTL_ADD, int(fd), &unix.EpollEvent{
++			Events: unix.EPOLLHUP,
++			Fd:     int32(fd),
++		})
++		if err != nil {
++			log.G(ctx).WithError(err).Warn("notifyClosed: failed to register fd for close notifications")
++			return
++		}
++
++		events := make([]unix.EpollEvent, 1)
++		if _, err := unix_noeintr.EpollWait(epFd, events, -1); err != nil {
++			log.G(ctx).WithError(err).Warn("notifyClosed: failed to wait for close notifications")
++			return
++		}
++		notify()
++	})
++	if err != nil {
++		log.G(ctx).WithError(err).Warn("notifyClosed: failed to register for close notifications")
++		return
++	}
++}
+diff --git a/api/server/router/container/notify_unsupported.go b/api/server/router/container/notify_unsupported.go
+new file mode 100644
+index 0000000000..8d80afcf33
+--- /dev/null
++++ b/api/server/router/container/notify_unsupported.go
+@@ -0,0 +1,10 @@
++//go:build !linux
++
++package container
++
++import (
++	"context"
++	"net"
++)
++
++func notifyClosed(ctx context.Context, conn net.Conn, notify func()) {}
+diff --git a/api/types/backend/backend.go b/api/types/backend/backend.go
+index e4e760905d..d6ec041663 100644
+--- a/api/types/backend/backend.go
++++ b/api/types/backend/backend.go
+@@ -30,7 +30,7 @@ type ContainerRmConfig struct {
+ 
+ // ContainerAttachConfig holds the streams to use when connecting to a container to view logs.
+ type ContainerAttachConfig struct {
+-	GetStreams func(multiplexed bool) (io.ReadCloser, io.Writer, io.Writer, error)
++	GetStreams func(multiplexed bool, cancel func()) (io.ReadCloser, io.Writer, io.Writer, error)
+ 	UseStdin   bool
+ 	UseStdout  bool
+ 	UseStderr  bool
+diff --git a/daemon/attach.go b/daemon/attach.go
+index 9809671134..aa23772047 100644
+--- a/daemon/attach.go
++++ b/daemon/attach.go
+@@ -52,10 +52,27 @@ func (daemon *Daemon) ContainerAttach(prefixOrName string, c *backend.ContainerA
+ 	ctr.StreamConfig.AttachStreams(&cfg)
+ 
+ 	multiplexed := !ctr.Config.Tty && c.MuxStreams
+-	inStream, outStream, errStream, err := c.GetStreams(multiplexed)
++
++	clientCtx, closeNotify := context.WithCancel(context.Background())
++	defer closeNotify()
++	go func() {
++		<-clientCtx.Done()
++		// The client has disconnected
++		// In this case we need to close the container's output streams so that the goroutines used to copy
++		// to the client streams are unblocked and can exit.
++		if cfg.CStdout != nil {
++			cfg.CStdout.Close()
++		}
++		if cfg.CStderr != nil {
++			cfg.CStderr.Close()
++		}
++	}()
++
++	inStream, outStream, errStream, err := c.GetStreams(multiplexed, closeNotify)
+ 	if err != nil {
+ 		return err
+ 	}
++
+ 	defer inStream.Close()
+ 
+ 	if multiplexed {
+diff --git a/integration/container/attach_test.go b/integration/container/attach_test.go
+index b761615de5..da31453ec2 100644
+--- a/integration/container/attach_test.go
++++ b/integration/container/attach_test.go
+@@ -2,13 +2,18 @@ package container // import "github.com/docker/docker/integration/container"
+ 
+ import (
+ 	"testing"
++	"time"
+ 
+ 	"github.com/docker/docker/api/types"
+ 	"github.com/docker/docker/api/types/container"
+ 	"github.com/docker/docker/api/types/network"
++	systemutil "github.com/docker/docker/integration/internal/system"
+ 	"github.com/docker/docker/testutil"
++	"github.com/docker/docker/testutil/daemon"
+ 	"gotest.tools/v3/assert"
+ 	is "gotest.tools/v3/assert/cmp"
++	"gotest.tools/v3/poll"
++	"gotest.tools/v3/skip"
+ )
+ 
+ func TestAttach(t *testing.T) {
+@@ -59,3 +64,58 @@ func TestAttach(t *testing.T) {
+ 		})
+ 	}
+ }
++
++// Regression test for #37182
++func TestAttachDisconnectLeak(t *testing.T) {
++	skip.If(t, testEnv.DaemonInfo.OSType != "linux", "Bug still exists on Windows")
++	t.Parallel()
++
++	ctx := testutil.StartSpan(baseContext, t)
++
++	// Use a new daemon to make sure stuff from other tests isn't affecting the
++	// goroutine count.
++	d := daemon.New(t)
++	defer d.Cleanup(t)
++
++	d.StartWithBusybox(ctx, t, "--iptables=false")
++
++	client := d.NewClientT(t)
++
++	resp, err := client.ContainerCreate(ctx,
++		&container.Config{
++			Image: "busybox",
++			Cmd:   []string{"/bin/sh", "-c", "while true; usleep 100000; done"},
++		},
++		&container.HostConfig{},
++		&network.NetworkingConfig{},
++		nil,
++		"",
++	)
++	assert.NilError(t, err)
++	cID := resp.ID
++	defer client.ContainerRemove(ctx, cID, container.RemoveOptions{
++		Force: true,
++	})
++
++	nGoroutines := systemutil.WaitForStableGoroutineCount(ctx, t, client)
++
++	attach, err := client.ContainerAttach(ctx, cID, container.AttachOptions{
++		Stdout: true,
++	})
++	assert.NilError(t, err)
++	defer attach.Close()
++
++	poll.WaitOn(t, func(_ poll.LogT) poll.Result {
++		count := systemutil.WaitForStableGoroutineCount(ctx, t, client)
++		if count > nGoroutines {
++			return poll.Success()
++		}
++		return poll.Continue("waiting for goroutines to increase from %d, current: %d", nGoroutines, count)
++	},
++		poll.WithTimeout(time.Minute),
++	)
++
++	attach.Close()
++
++	poll.WaitOn(t, systemutil.CheckGoroutineCount(ctx, client, nGoroutines), poll.WithTimeout(time.Minute))
++}
+diff --git a/integration/internal/system/goroutines.go b/integration/internal/system/goroutines.go
+new file mode 100644
+index 0000000000..09f2ddb478
+--- /dev/null
++++ b/integration/internal/system/goroutines.go
+@@ -0,0 +1,78 @@
++package system
++
++import (
++	"context"
++	"time"
++
++	"github.com/docker/docker/client"
++	"gotest.tools/v3/poll"
++)
++
++// WaitForStableGoroutineCount polls the daemon Info API and returns the reported goroutine count
++// after multiple calls return the same number.
++func WaitForStableGoroutineCount(ctx context.Context, t poll.TestingT, apiClient client.SystemAPIClient, opts ...poll.SettingOp) int {
++	var out int
++	// Use a longish delay to make sure the goroutine count is actually stable.
++	defaults := []poll.SettingOp{poll.WithTimeout(time.Minute), poll.WithDelay(time.Second)}
++	opts = append(defaults, opts...)
++
++	poll.WaitOn(t, StableGoroutineCount(ctx, apiClient, &out), opts...)
++	return out
++}
++
++// StableGoroutineCount is a [poll.Check] that polls the daemon info API until the goroutine count is the same for 3 iterations.
++func StableGoroutineCount(ctx context.Context, apiClient client.SystemAPIClient, count *int) poll.Check {
++	var (
++		numStable int
++		nRoutines int
++	)
++
++	return func(t poll.LogT) poll.Result {
++		n, err := getGoroutineNumber(ctx, apiClient)
++		if err != nil {
++			return poll.Error(err)
++		}
++
++		last := nRoutines
++
++		if nRoutines == n {
++			numStable++
++		} else {
++			numStable = 0
++			nRoutines = n
++		}
++
++		if numStable > 3 {
++			*count = n
++			return poll.Success()
++		}
++		return poll.Continue("goroutine count is not stable: last %d, current %d, stable iters: %d", last, n, numStable)
++	}
++}
++
++// CheckGoroutineCount returns a [poll.Check] that polls the daemon info API until the expected number of goroutines is hit.
++func CheckGoroutineCount(ctx context.Context, apiClient client.SystemAPIClient, expected int) poll.Check {
++	first := true
++	return func(t poll.LogT) poll.Result {
++		n, err := getGoroutineNumber(ctx, apiClient)
++		if err != nil {
++			return poll.Error(err)
++		}
++		if n > expected {
++			if first {
++				t.Log("Waiting for goroutines to stabilize")
++				first = false
++			}
++			return poll.Continue("exepcted %d goroutines, got %d", expected, n)
++		}
++		return poll.Success()
++	}
++}
++
++func getGoroutineNumber(ctx context.Context, apiClient client.SystemAPIClient) (int, error) {
++	info, err := apiClient.Info(ctx)
++	if err != nil {
++		return 0, err
++	}
++	return info.NGoroutines, nil
++}
+diff --git a/internal/unix_noeintr/epoll_linux.go b/internal/unix_noeintr/epoll_linux.go
+new file mode 100644
+index 0000000000..ef691ab3eb
+--- /dev/null
++++ b/internal/unix_noeintr/epoll_linux.go
+@@ -0,0 +1,37 @@
++package unix_noeintr
++
++import (
++	"errors"
++
++	"golang.org/x/sys/unix"
++)
++
++func EpollCreate() (int, error) {
++	for {
++		fd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
++		if errors.Is(err, unix.EINTR) {
++			continue
++		}
++		return fd, err
++	}
++}
++
++func EpollCtl(epFd int, op int, fd int, event *unix.EpollEvent) error {
++	for {
++		err := unix.EpollCtl(epFd, op, fd, event)
++		if errors.Is(err, unix.EINTR) {
++			continue
++		}
++		return err
++	}
++}
++
++func EpollWait(epFd int, events []unix.EpollEvent, msec int) (int, error) {
++	for {
++		n, err := unix.EpollWait(epFd, events, msec)
++		if errors.Is(err, unix.EINTR) {
++			continue
++		}
++		return n, err
++	}
++}
+-- 
+2.34.1
+

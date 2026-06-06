@@ -1,0 +1,47 @@
+From 05c20a6e1c708bc881dee36554c6598937afa699 Mon Sep 17 00:00:00 2001
+From: Cam <gh@sparr.email>
+Date: Mon, 2 Nov 2020 19:56:58 -0800
+Subject: [PATCH] handleContainerExit: put a timeout on containerd DeleteTask
+
+Also move c.Lock() below containerd delete task, as it doesn't seem that
+there is any necessity to hold the container lock while containerd is
+killing the task.
+
+This fixes a potential edge-case where containerd delete task hangs, and
+thereafter all operations on the container would hang forever, as this
+function is holding onto the container lock.
+
+Signed-off-by: Cam <gh@sparr.email>
+---
+ daemon/monitor.go | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/daemon/monitor.go b/daemon/monitor.go
+index 04d7212dbc..6b3efb483e 100644
+--- a/daemon/monitor.go
++++ b/daemon/monitor.go
+@@ -26,15 +26,17 @@ func (daemon *Daemon) setStateCounter(c *container.Container) {
+ 
+ func (daemon *Daemon) handleContainerExit(c *container.Container, e *libcontainerdtypes.EventInfo) error {
+ 	c.Lock()
+-
+-	ec, et, err := daemon.containerd.DeleteTask(context.Background(), c.ID)
++	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
++	ec, et, err := daemon.containerd.DeleteTask(ctx, c.ID)
++	cancel()
+ 	if err != nil {
+-		logrus.WithError(err).Warnf("failed to delete container %s from containerd", c.ID)
++		logrus.WithError(err).WithField("container", c.ID).Warnf("failed to delete container from containerd")
+ 	}
+ 
+-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
++	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+ 	c.StreamConfig.Wait(ctx)
+ 	cancel()
++
+ 	c.Reset(false)
+ 
+ 	exitStatus := container.ExitStatus{
+-- 
+2.34.1
+
